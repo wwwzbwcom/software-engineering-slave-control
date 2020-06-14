@@ -1,4 +1,4 @@
-import { Settings, Event  } from './model';
+import { Settings, Events  } from './model';
 import eventBus from './main';
 
 /** Every Second */
@@ -30,7 +30,7 @@ class EnviromentSim {
             }
         }
     
-        eventBus.$emit(Event.onEnviromentUpdate, this.enviromentTempareture);
+        eventBus.$emit(Events.onEnviromentUpdate, this.enviromentTempareture);
     }
 
     getEnviromentTempareture = () : number => {

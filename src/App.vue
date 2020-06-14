@@ -1,6 +1,6 @@
 <template>
   <div id="app">
-    <el-container>
+    <!-- <el-container>
     <el-header class="toolbar">
       <h1 class="toolbar-title">正在控制 507 房间</h1>
       <div class="toolbar-buttons">
@@ -8,7 +8,7 @@
       <el-button  icon="el-icon-setting" type="info">配置证书</el-button>
       </div>
     </el-header >
-    </el-container>
+    </el-container> -->
     <ControlPanel></ControlPanel>
   </div>
 </template>
@@ -30,29 +30,6 @@ body {
   margin: 0;
 }
 
-.toolbar-title {
-  color: white;
-  line-height: 60px;
-  display: inline;
-}
-
-.toolbar {
-  background-color: #444444;
-  width: auto;
-}
-
-.toolbar-buttons {
-  width: 40vw;
-  height: 100%;
-  float: right;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.toolbar-buttons > .el-button {
-  height: 40px;
-  align-self: center;
-}
 
 #app {
   font-family: "Helvetica Neue",Helvetica,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","微软雅黑",Arial,sans-serif;

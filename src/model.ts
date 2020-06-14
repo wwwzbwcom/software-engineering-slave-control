@@ -1,5 +1,6 @@
 
-export enum Event {
+export enum Events {
+    onSpeedUpdate = 'onSettingsUpdate',
     onStatsUpdate = 'onStatsUpdate',
     onEnviromentUpdate = "onEnviromentUpdate"
 }
@@ -12,7 +13,33 @@ export enum Event {
 export interface Settings {
     on: boolean;
     tempareture: number;
-    speed: 0 | 1 | 2 | 3 | 4 | 5;
+    speed: 0 | 1 | 2 | 3;
+}
+
+
+export function convertSettingToServer(settings: Settings, mode: "cold" | "warm"):any {
+    let ss = "non";
+    switch(settings.speed) {
+        case 0:
+            ss = "non";
+            break;
+        case 1:
+            ss = "mid";
+            break;
+        case 2:
+            ss = "low";
+            break;
+        case 3:
+            ss = "high";
+            break;
+    }
+    let sm = "cool";
+    if(mode == "warm") sm = "heat";
+    return {
+        speed: ss,
+        tempareture: settings.tempareture,
+        mode: sm
+    }
 }
 
 
@@ -21,8 +48,38 @@ export interface Settings {
  */
 export interface MasterSettings {
     mode: "cold" | "warm",
+    default_tempareture: number,
     min_tempareture: number,
-    max_tempareture: number
+    max_tempareture: number,
+    status_upload_interval: number,
+    statistics_update_interval: number
+}
+
+export function convertMasterSettingsFromServer(data: any): MasterSettings {
+    let masterSettings : MasterSettings;
+
+    if(data.mode == "cool") {
+        masterSettings = {
+            mode: "cold",
+            min_tempareture: data.cool_min,
+            max_tempareture: data.cool_max,
+            default_tempareture: data.default_tempareture,
+            statistics_update_interval: data.update_delay,
+            status_upload_interval: data.metric_delay
+        }
+    }
+    else {
+        masterSettings = {
+            mode: "warm",
+            min_tempareture: data.heat_min,
+            max_tempareture: data.heat_max,
+            default_tempareture: data.default_tempareture,
+            statistics_update_interval: data.update_delay,
+            status_upload_interval: data.metric_delay
+        }
+    }
+
+    return masterSettings;
 }
 
 /**
@@ -30,7 +87,7 @@ export interface MasterSettings {
  * @member fee {number} 当次开机价格
  */
 export interface Stats {
-    total_fee: number;
+    energy: number;
     fee: number;
 }
 
@@ -40,8 +97,7 @@ export interface Stats {
  * @member phone {number} 住客手机号信息（认证用）
  * @member identity_number {string} 住客身份证（认证用）
  */
-export interface LoginInfo {
+export interface UserInfo {
     room: string;
-    phone?: string;
-    identity_number?: string;
+    id: string;
 }
