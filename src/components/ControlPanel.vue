@@ -44,6 +44,7 @@
         <h1 class="toolbar-title" v-if="this.userInfo">正在控制 {{ this.userInfo.room }} 房间</h1>
         <h1 class="toolbar-title" v-if="!this.userInfo">未登录</h1>
         <div class="toolbar-buttons">
+          <el-button v-if="this.userInfo" type="danger" @click="quit()">退出登录</el-button>
           <el-button icon="el-icon-user" type="primary" @click="authDialogVisible = true">登录</el-button>
           <el-button icon="el-icon-setting" type="info" @click="keyDialogVisible = true">配置证书</el-button>
         </div>
@@ -66,7 +67,7 @@
             <div class="status-card-item">
               <span
                 type="success"
-              >{{ this.masterSettings.min_tempareture }} ~ {{ this.masterSettings.max_tempareture }}</span>
+              >{{ this.masterSettings.min_temperature }} ~ {{ this.masterSettings.max_temperature }}</span>
               <el-tag type="success">温度范围</el-tag>
             </div>
           </el-col>
@@ -83,12 +84,14 @@
                 inactive-text="关闭空调"
                 @change="handleSettingsChange()"
               ></el-switch>
-              <span type="success">当前状态 {{ currentSettings.on ? " 开机" : " 关机" }}</span>
             </div>
+          </el-col>
+          <el-col :span="12">
+            <span type="primary">{{ currentSettings.on ? " 开机" : " 关机" }}</span>
           </el-col>
         </el-row>
 
-        <el-row v-if="currentSettings.on">
+        <el-row>
           <el-col :span="12">
             <el-card class="status-card">
               <div slot="header" class="clearfix">
@@ -96,21 +99,21 @@
               </div>
 
               <div class="status-card-item">
-                <span type="primary">{{ this.currentSettings.tempareture }}</span>
+                <span type="primary">{{ this.currentSettings.temperature }}</span>
                 <el-tag type="primary">当前设定温度</el-tag>
               </div>
 
               <div class="status-card-item">
                 <span
                   type="success"
-                >{{ this.enviromentTempareture ? this.enviromentTempareture.toFixed(2) : "N/A" }}</span>
-                <el-tag type="success">环境温度</el-tag>
+                >{{ this.enviromentTemperature ? this.enviromentTemperature.toFixed(2) : "N/A" }}</span>
+                <el-tag type="success">当前温度</el-tag>
               </div>
               <div class="status-card-item">
                 <span
                   type="success"
-                >{{ this.ambientTempareture ? this.ambientTempareture.toFixed(2) : "N/A" }}</span>
-                <el-tag type="success">室外温度</el-tag>
+                >{{ this.ambientTemperature ? this.ambientTemperature.toFixed(2) : "N/A" }}</span>
+                <el-tag type="success">环境温度</el-tag>
               </div>
 
               <div class="splitter"></div>
@@ -119,10 +122,11 @@
 
               <div class="status-card-item">
                 <el-slider
-                  v-model="pendingSettings.tempareture"
+                  v-if="currentSettings.on"
+                  v-model="pendingSettings.temperature"
                   :step="1"
-                  :min="masterSettings.min_tempareture"
-                  :max="masterSettings.max_tempareture"
+                  :min="masterSettings.min_temperature"
+                  :max="masterSettings.max_temperature"
                   @change="handleSettingsChange()"
                 ></el-slider>
               </div>
@@ -145,6 +149,7 @@
 
               <div class="status-card-item">
                 <el-slider
+                  v-if="currentSettings.on"
                   v-model="pendingSettings.speed"
                   :step="1"
                   :min="0"
@@ -161,12 +166,12 @@
             <el-divider content-position="left">计费信息</el-divider>
 
             <div class="status-card-item">
-              <span type="success">{{ this.stats.fee.toFixed(2) }} 元</span>
+              <span type="success">{{ this.stats.fee ? this.stats.fee.toFixed(2) : 0 }} 元</span>
               <el-tag type="success">当前费用</el-tag>
             </div>
 
             <div class="status-card-item">
-              <span type="primary">{{ this.stats.energy.toFixed(2) }} 千瓦时</span>
+              <span type="primary">{{ this.stats.energy ? this.stats.energy.toFixed(2) : 0 }} 千瓦时</span>
               <el-tag type="primary">消耗电量</el-tag>
             </div>
           </el-col>
@@ -184,13 +189,25 @@ import _ from "lodash";
 import eventBus from "../main";
 // import enviromentSim from "../enviroment-sim";
 import service from "../service";
-import acSelector from '../air-conditioner';
+import acSelector from "../air-conditioner";
 import { ElForm } from "element-ui/types/form";
 
 let ac: any;
 
 @Component
 export default class ControlPanel extends Vue {
+  async quit() {
+    let res = await service.disconnect();
+
+    if (!res.error) {
+      this.$data.loading = true;
+      this.$data.loadingText = "正在退出";
+      setTimeout(() => {
+        window.history.go();
+      }, 100);
+    }
+  }
+
   async mounted() {
     ac = await acSelector();
     ac.setSettings(this.$data.currentSettings);
@@ -200,12 +217,36 @@ export default class ControlPanel extends Vue {
       this.$data.stats = stats;
     });
 
-    eventBus.$on(Events.onEnviromentUpdate, (enviromentTempareture: number, ambientTempareture:number) => {
-      Object.assign(this.$data, {
-        enviromentTempareture,
-        ambientTempareture
-      })
-    });
+    let hasStop = false;
+
+    eventBus.$on(
+      Events.onEnviromentUpdate,
+      async (enviromentTemperature: number, ambientTemperature: number) => {
+        Object.assign(this.$data, {
+          enviromentTemperature,
+          ambientTemperature
+        });
+
+        let offset =
+          enviromentTemperature - this.$data.currentSettings.temperature;
+
+        if (this.$data.userInfo && Math.abs(offset) < 0.1) {
+          if (!hasStop) {
+            await service.stop();
+          }
+        } else {
+          hasStop = false;
+        }
+
+        if (this.$data.masterSettings.mode == "warm") {
+          offset = -offset;
+        }
+
+        if (this.$data.userInfo && offset > 1) {
+          this.handleSettingsChange();
+        }
+      }
+    );
 
     eventBus.$on(Events.onSpeedUpdate, (speed: number) => {
       this.$data.currentSettings.speed = speed;
@@ -220,12 +261,18 @@ export default class ControlPanel extends Vue {
   }
 
   showSuccess(message: string) {
-    this.$message.success(message);
+    this.$message.success({
+      message: message,
+      offset: 80
+    });
     console.log(message);
   }
 
   showError(message: string) {
-    this.$message.error(message);
+    this.$message.error({
+      message: message,
+      offset: 80
+    });
     console.error(message);
   }
 
@@ -248,7 +295,7 @@ export default class ControlPanel extends Vue {
           ns.speed = this.$data.currentSettings.speed;
           this.$data.currentSettings = ns;
           ac.setSettings(this.$data.currentSettings);
-          this.showSuccess(res.message);
+          // this.showSuccess(res.message);
         }
       }
     }, 1000);
@@ -271,7 +318,6 @@ export default class ControlPanel extends Vue {
       this.$data.loading = true;
 
       const res = await service.login(this.$data.authForm);
-      console.log(res);
       if (res.error) {
         this.showError(res.message);
       } else {
@@ -281,27 +327,29 @@ export default class ControlPanel extends Vue {
         this.showSuccess(res.message);
 
         {
-          let res = await service.setSettings(this.$data.pendingSettings);
-          console.log(res);
+          this.$data.loadingText = "正在获取主控信息";
+
+          let res = await service.getMasterSettings();
+          console.log("[MASTER]", res);
           if (res.error) {
             this.showError(res.message);
-          } else if (res.data) {
+          } else {
             this.$data.loading = false;
             this.$data.masterSettings = res.data;
             this.showSuccess(res.message);
           }
+
+          this.$data.currentSettings.temperature = this.$data.masterSettings.default_temperature;
+          this.$data.pendingSettings.temperature = this.$data.masterSettings.default_temperature;
         }
 
         {
-          this.$data.loadingText = "正在获取主控信息";
-
-          let res = await service.getMasterSettings();
-          console.log(res);
+          let res = await service.setSettings(this.$data.pendingSettings);
           if (res.error) {
             this.showError(res.message);
           } else if (res.data) {
             this.$data.loading = false;
-            this.$data.masterSettings = res.data;
+            this.$data.currentSettings = res.data;
             this.showSuccess(res.message);
           }
         }
@@ -334,7 +382,7 @@ export default class ControlPanel extends Vue {
 
     let settings: Settings = {
       on: false,
-      tempareture: 26,
+      temperature: 26,
       speed: 0
     };
     let data = {
@@ -347,8 +395,8 @@ export default class ControlPanel extends Vue {
       authDialogVisible: true,
       loading: true,
       loadingText: "等待登录中",
-      enviromentTempareture: -1, //enviromentSim.getEnviromentTempareture(),
-      ambientTempareture: -1,
+      enviromentTemperature: -1, //enviromentSim.getEnviromenttemperature(),
+      ambientTemperature: -1,
       currentSettings: settings,
       pendingSettings: _.cloneDeep(settings),
       stats: {
@@ -358,8 +406,8 @@ export default class ControlPanel extends Vue {
       userInfo: null,
       masterSettings: {
         mode: "cold",
-        min_tempareture: 16,
-        max_tempareture: 26
+        min_temperature: 16,
+        max_temperature: 26
       } as MasterSettings
     };
 
@@ -367,8 +415,8 @@ export default class ControlPanel extends Vue {
       loading: boolean;
       loadingText: string;
       currentSettings: Settings;
-      enviromentTempareture: number;
-      ambientTempareture: number;
+      enviromentTemperature: number;
+      ambientTemperature: number;
       pendingSettings: Settings;
       userInfo: UserInfo | null;
       stats: Stats;

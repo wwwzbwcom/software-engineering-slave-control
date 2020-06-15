@@ -1,8 +1,11 @@
+import eventBus from './main';
+import {Events} from './model';
+
 const io = require('socket.io-client');
 
 class ServiceWS {
 
-    host = 'http://112.126.65.59:2022/';
+    host = 'ws://112.126.65.59:2022/';
     mode: string;
     socket: any;
 
@@ -38,37 +41,37 @@ class ServiceWS {
     }
 
     // 开始送风
-    startSupply(fan_speed: string, mode: string) {
-        console.log('[WS - START SUPPLY]', new Date(Date.now()).toUTCString(), this.mode, fan_speed, mode);
-        this.mode = mode;
+    startSupply(speed: string, mode: string) {
+        console.log('[WS - START SUPPLY]', new Date(Date.now()).toUTCString(), speed, mode);
 
-        let speed = 0;
-        switch (mode) {
+        let s = 0;
+        this.mode = mode;
+        switch (speed) {
             case "non":
-                speed = 0;
+                s = 0;
                 break;
             case "low":
-                speed = 1;
+                s = 1;
                 break;
             case "mid":
-                speed = 2;
+                s = 2;
                 break;
             case "high":
-                speed = 3;
+                s = 3;
                 break;
         }
 
-        if (this.handler) {
-            this.handler(speed);
-        }
+        console.log(s);
+        eventBus.$emit(Events.onSpeedUpdate, s);
     }
 
-    handler: ((speed: number) => void) | null = null;
 
     // 停止送风
     stopSupply() {
         console.log('[WS - STOP SUPPLY]', new Date(Date.now()).toUTCString());
         this.mode = "non";
+
+        eventBus.$emit(Events.onSpeedUpdate, 0);
     }
 
     connect(room: string) {
@@ -76,7 +79,7 @@ class ServiceWS {
             query: {
                 room_id: room
             },
-            transports: ['polling']
+            transports: ['polling', 'websocket']
         };
         this.socket = io(this.host, socket_options);
         this.socket.on('reconnect_attempt', () => this.onAttempingReconnect());

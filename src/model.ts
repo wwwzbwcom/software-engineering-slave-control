@@ -12,22 +12,22 @@ export enum Events {
  */
 export interface Settings {
     on: boolean;
-    tempareture: number;
+    temperature: number;
     speed: 0 | 1 | 2 | 3;
 }
 
 
-export function convertSettingToServer(settings: Settings, mode: "cold" | "warm"):any {
+export function convertSettingToServer(settings: Settings, mode: "cold" | "warm", fan_speed:boolean = false):any {
     let ss = "non";
     switch(settings.speed) {
         case 0:
             ss = "non";
             break;
         case 1:
-            ss = "mid";
+            ss = "low";
             break;
         case 2:
-            ss = "low";
+            ss = "mid";
             break;
         case 3:
             ss = "high";
@@ -35,11 +35,23 @@ export function convertSettingToServer(settings: Settings, mode: "cold" | "warm"
     }
     let sm = "cool";
     if(mode == "warm") sm = "heat";
-    return {
-        speed: ss,
-        tempareture: settings.tempareture,
-        mode: sm
+
+    if(fan_speed)
+    {
+        return {
+            fan_speed: ss,
+            temperature: settings.temperature,
+            mode: sm
+        }
     }
+    else {
+        return {
+            speed: ss,
+            temperature: settings.temperature,
+            mode: sm
+        }
+    }
+    
 }
 
 
@@ -48,9 +60,9 @@ export function convertSettingToServer(settings: Settings, mode: "cold" | "warm"
  */
 export interface MasterSettings {
     mode: "cold" | "warm",
-    default_tempareture: number,
-    min_tempareture: number,
-    max_tempareture: number,
+    default_temperature: number,
+    min_temperature: number,
+    max_temperature: number,
     status_upload_interval: number,
     statistics_update_interval: number
 }
@@ -61,9 +73,9 @@ export function convertMasterSettingsFromServer(data: any): MasterSettings {
     if(data.mode == "cool") {
         masterSettings = {
             mode: "cold",
-            min_tempareture: data.cool_min,
-            max_tempareture: data.cool_max,
-            default_tempareture: data.default_tempareture,
+            min_temperature: data.cool_min,
+            max_temperature: data.cool_max,
+            default_temperature: data.default_temperature,
             statistics_update_interval: data.update_delay,
             status_upload_interval: data.metric_delay
         }
@@ -71,9 +83,9 @@ export function convertMasterSettingsFromServer(data: any): MasterSettings {
     else {
         masterSettings = {
             mode: "warm",
-            min_tempareture: data.heat_min,
-            max_tempareture: data.heat_max,
-            default_tempareture: data.default_tempareture,
+            min_temperature: data.heat_min,
+            max_temperature: data.heat_max,
+            default_temperature: data.default_temperature,
             statistics_update_interval: data.update_delay,
             status_upload_interval: data.metric_delay
         }
@@ -83,7 +95,7 @@ export function convertMasterSettingsFromServer(data: any): MasterSettings {
 }
 
 /**
- * @member total_fee {number} 入住以来累计价格 
+ * @member energy {number} 入住以来累计价格 
  * @member fee {number} 当次开机价格
  */
 export interface Stats {

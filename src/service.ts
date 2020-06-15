@@ -52,9 +52,9 @@ class MockService extends AbstractService {
         return Promise.resolve<ServiceResponse<MasterSettings>>({
             data: {
                 mode: "cold",
-                min_tempareture: 16,
-                max_tempareture: 26,
-                default_tempareture: 26,
+                min_temperature: 16,
+                max_temperature: 26,
+                default_temperature: 26,
                 status_upload_interval: 1000,
                 statistics_update_interval: 1000
             },
@@ -64,7 +64,6 @@ class MockService extends AbstractService {
     }
 
     setSettings = async (settings: Settings): Promise<ServiceResponse<Settings>> => {
-        console.log(settings);
         if (settings.speed == 3) {
             return Promise.resolve<ServiceResponse<Settings>>({
                 message: "设置失败！",
@@ -99,13 +98,38 @@ class MockService extends AbstractService {
 }
 
 
-class Service extends MockService {
+class Service extends AbstractService {
 
     host: string = "http://112.126.65.59:2022";
 
 
     constructor() {
         super();
+    }
+
+    sendSettings = async (settings: Settings, timeout: number = 500): Promise<ServiceResponse<Settings>> => {
+        try {
+            let s = convertSettingToServer(settings, this.masterSettings?.mode ?? "cold", true);
+            let res = await axios.post(this.host + "/v1/metrics", s, { headers: this.getHeaders() });
+            if (res.data.code) {
+                return {
+                    data: settings,
+                    message: "发送设置成功",
+                    error: false
+                }
+            }
+            return {
+                message: JSON.stringify(res.data),
+                error: true
+            }
+        } catch (err) {
+            return {
+                message: JSON.stringify(err),
+                error: true
+            }
+
+        }
+
     }
 
     /**
@@ -115,9 +139,34 @@ class Service extends MockService {
      * - Error: Do nothing
      */
     getStats = async (): Promise<ServiceResponse<Stats>> => {
-        return await mockService.getStats();
-        // let res = await axios.get(this.host + "/v1/statistics");
-        // res.data;
+        try {
+            let res = await axios.get(this.host + "/v1/statistics", {
+                headers: this.getHeaders()
+            });
+            if (res.data.code == 0) {
+                let s: Stats;
+                s = {
+                    energy: parseFloat(res.data.energy),
+                    fee: parseFloat(res.data.cost)
+                }
+                eventBus.$emit(Events.onStatsUpdate, s);
+
+                return {
+                    data: s,
+                    error: false,
+                    message: "获取统计成功"
+                };
+            }
+            else {
+                return {
+                    error: true,
+                    message: JSON.stringify(res.data)
+                };
+            }
+        } catch (err) {
+            return this.unkownErrorHandler(err) as any;
+        }
+
     };
 
     /**
@@ -150,22 +199,46 @@ class Service extends MockService {
         }
     }
 
-    /**
-     * Request Server to Permit Change Settings
-     * - Success: return null
-     * - Error: return error message
-     */
+
+    stop = async (): Promise<ServiceResponse> => {
+        try {
+            let d = {
+                room_id: this.userInfo?.room
+            }
+            let res = await axios.post(this.host + "/v1/state_control/stop", d, { headers: this.getHeaders() })
+            console.log("[SET SETTINGS]", res.data);
+            if (res.data.code == 0) {
+                return {
+                    error: false,
+                    message: "设置成功！"
+                }
+            }
+            return {
+                error: true,
+                message: "设置失败：" + JSON.stringify(res.data)
+            }
+        }
+        catch (err) {
+            return {
+                error: true,
+                message: "设置失败：" + JSON.stringify(err)
+            }
+        }
+    }
+
     setSettings = async (settings: Settings): Promise<ServiceResponse<Settings>> => {
         try {
+
             let res: any;
-            if (settings.on) {
-                let d = convertSettingToServer(settings, this.masterSettings?.mode ?? "cold");
+            if (settings.on && settings.speed > 0) {
+                let d = convertSettingToServer(settings, this.masterSettings?.mode ?? "cold", false);
                 res = await axios.post(this.host + "/v1/state_control/start", d, { headers: this.getHeaders() });
                 console.log("[SET SETTINGS]", res.data);
                 if (res.data.code == 0) {
+                    this.settings = settings;
                     return {
                         error: false,
-                        message: "设置成功，等待主控响应！",
+                        message: "设置成功！",
                         data: settings
                     }
                 }
@@ -174,12 +247,13 @@ class Service extends MockService {
                 let d = {
                     room_id: this.userInfo?.room
                 }
-                res = await axios.post(this.host + "/v1/state_control/stop", d, {headers:this.getHeaders()})
+                res = await axios.post(this.host + "/v1/state_control/stop", d, { headers: this.getHeaders() })
                 console.log("[SET SETTINGS]", res.data);
                 if (res.data.code == 0) {
+                    this.settings = settings;
                     return {
                         error: false,
-                        message: "设置成功，等待主控响应！",
+                        message: "设置成功！",
                         data: settings
                     }
                 }
@@ -199,6 +273,10 @@ class Service extends MockService {
 
     };
 
+    statistics_update_interval_id: number | null = null;
+    status_upload_interval_id: number | null = null;
+
+
     login = async (userInfo: UserInfo): Promise<ServiceResponse<UserInfo>> => {
         try {
             let res = await axios.post(this.host + "/v1/connect", {
@@ -214,9 +292,23 @@ class Service extends MockService {
                 // ws.connect(this.userInfo.room);
                 console.log("[ROOM NUMBER ID]", res.data.room_id);
                 ws.connect(res.data.room_id);
-                ws.handler = (speed:number) => {
-                    eventBus.$emit(Events.onSpeedUpdate, speed);
+
+                if (this.statistics_update_interval_id) {
+                    clearInterval(this.statistics_update_interval_id);
                 }
+                this.statistics_update_interval_id = setInterval(async () => {
+                    await service.getStats();
+                }, this.masterSettings.statistics_update_interval);
+
+                if (this.status_upload_interval_id) {
+                    clearInterval(this.status_upload_interval_id);
+                }
+                this.status_upload_interval_id = setInterval(async () => {
+                    if (this.settings != null) {
+                        await service.sendSettings(this.settings);
+                    }
+                }, this.masterSettings.status_upload_interval);
+
                 return {
                     error: false,
                     message: "登录成功",
@@ -243,6 +335,35 @@ class Service extends MockService {
             message: "未知错误" + JSON.stringify(err)
         }
     }
+
+    async disconnect(): Promise<ServiceResponse> {
+        
+        try {
+            let res = await axios.post(this.host + "/v1/disconnect", {}, { headers: this.getHeaders() });
+            console.log("[DISCONNECT]", res);
+            if (res.data.code == 0) {
+                return {
+                    error: false,
+                    message: "退出成功"
+                }
+
+            } else {
+                return {
+                    error: true,
+                    message: JSON.stringify(res.data)
+                }
+            }
+
+        }
+        catch (err) {
+            return {
+                error: true,
+                message: JSON.stringify(err)
+            }
+        }
+    }
+
+    settings: Settings | null = null;
     masterSettings: MasterSettings | null = null;
     userInfo: UserInfo | null = null;
 }
@@ -250,8 +371,6 @@ class Service extends MockService {
 const mockService = new MockService();
 const service = new Service();
 
-setInterval(() => {
-    service.getStats();
-}, 1000)
+
 
 export default service;

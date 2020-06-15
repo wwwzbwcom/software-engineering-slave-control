@@ -5,7 +5,7 @@ import eventBus from './main';
 const scale = 10000;
 
 class EnviromentSim {
-    enviromentTempareture : number = 16;
+    enviromenttemperature : number = 16;
     settings : Settings | null = null;
 
     setSettings = (settings: Settings) => {
@@ -16,25 +16,25 @@ class EnviromentSim {
         if(this.settings) {
             if(this.settings.on) {
                 let direction = 0;
-                if(this.settings.tempareture > this.enviromentTempareture) {
+                if(this.settings.temperature > this.enviromenttemperature) {
                     direction = 1;
                 }
-                if(this.settings.tempareture < this.enviromentTempareture) {
+                if(this.settings.temperature < this.enviromenttemperature) {
                     direction = -1;
                 }
         
-                this.enviromentTempareture += direction * ms * this.settings.speed * this.settings.speed / scale;
+                this.enviromenttemperature += direction * ms * this.settings.speed * this.settings.speed / scale;
             }
             else {
-                this.enviromentTempareture -= 1;
+                this.enviromenttemperature -= 1;
             }
         }
     
-        eventBus.$emit(Events.onEnviromentUpdate, this.enviromentTempareture);
+        eventBus.$emit(Events.onEnviromentUpdate, this.enviromenttemperature);
     }
 
-    getEnviromentTempareture = () : number => {
-        return this.enviromentTempareture;
+    getEnviromenttemperature = () : number => {
+        return this.enviromenttemperature;
     }
 }
 
@@ -49,7 +49,7 @@ export default enviromentSim;
 
 
 
-// let enviromentTempareture : number = 16;
+// let enviromenttemperature : number = 16;
 // let settings : Settings | null = null;
 
 // export const setSettings = (new_settings: Settings) => {
@@ -59,20 +59,20 @@ export default enviromentSim;
 // const simulateEnviroment = (ms:number) => {
 //     if(settings) {
 //         let direction = 0;
-//         if(settings.tempareture > enviromentTempareture) {
+//         if(settings.temperature > enviromenttemperature) {
 //             direction = 1;
 //         }
-//         if(settings.tempareture < enviromentTempareture) {
+//         if(settings.temperature < enviromenttemperature) {
 //             direction = -1;
 //         }
 
-//         enviromentTempareture = direction * ms * settings.speed / scale;
+//         enviromenttemperature = direction * ms * settings.speed / scale;
 //     }
 
-//     vue.$emit("enviroment-update", enviromentTempareture);
+//     vue.$emit("enviroment-update", enviromenttemperature);
 // }
 
-// export const getEnviromentTempareture = () : number => {
-//     return enviromentTempareture;
+// export const getEnviromenttemperature = () : number => {
+//     return enviromenttemperature;
 // }
 

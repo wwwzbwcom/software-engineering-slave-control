@@ -8,15 +8,12 @@ abstract class AbstractAirConditioner {
 }
 
 class MockAirConditioner extends AbstractAirConditioner {
-    enviroment_tempareture: number = 26;
-    ambient_tempareture: number = 30;
+    enviroment_temperature: number = 25;
+    ambient_temperature: number = 30;
     settings: Settings | null = null;
 
     constructor() {
         super()
-        setInterval(() => {
-            this.simulateEnviroment(1000);
-        }, 1000);
     }
 
     async setSettings(settings: Settings) {
@@ -24,20 +21,39 @@ class MockAirConditioner extends AbstractAirConditioner {
         return Promise.resolve();
     }
 
+    pendingTime = 0;
+
     simulateEnviroment = (ms: number) => {
-        console.log("[MOCKING]", this.settings);
+        // console.log("[MOCKING]", this.settings);
 
         if (this.settings) {
+            let offset  = 0;
             let v = 0;
             if (this.settings.on && this.settings.speed > 0) {
-                v = this.settings.tempareture - this.enviroment_tempareture;
+                v = this.settings.temperature - this.enviroment_temperature;
+                switch(this.settings.speed) {
+                    case 1:
+                        offset = 1 / 25;
+                        break;
+                    case 2:
+                        offset = 1 / 20;
+                        break;
+                    case 3:
+                        offset = 1 / 15;
+                        break;
+                }
             }
             else {
-                v = this.ambient_tempareture - this.enviroment_tempareture;
+                v = this.ambient_temperature - this.enviroment_temperature;
+                offset = 1 / 10;
             }
 
-            v = v / Math.abs(v);
-            this.enviroment_tempareture += v * 0.05 * ms / 1000;
+            if (v != 0) {
+                v = v / Math.abs(v);
+                this.enviroment_temperature += v * offset * ms / 1000;
+            }
+
+
         }
     }
 
@@ -45,8 +61,8 @@ class MockAirConditioner extends AbstractAirConditioner {
 
     async getData(): Promise<any> {
         return Promise.resolve<any>({
-            enviroment_tempareture: this.enviroment_tempareture,
-            ambient_tempareture: this.ambient_tempareture
+            enviroment_temperature: this.enviroment_temperature,
+            ambient_temperature: this.ambient_temperature
         });
     }
 }
@@ -92,13 +108,13 @@ class AirConditioner extends AbstractAirConditioner {
 async function acSelector() {
     let ac: AirConditioner | MockAirConditioner = new AirConditioner();
     let available = await ac.ping();
-    if (!available) {
+    if (true) {
         console.log("[MOCK AC]");
         ac = new MockAirConditioner();
 
         setInterval(() => {
-            (ac as MockAirConditioner).simulateEnviroment(1000)
-        }, 1000);
+            (ac as MockAirConditioner).simulateEnviroment(100)
+        }, 100);
     }
     else {
         console.log("[REAL AC]");
@@ -106,8 +122,8 @@ async function acSelector() {
 
     setInterval(async () => {
         let d = await ac.getData();
-        let et = parseFloat(d['enviroment_tempareture']);
-        let at = parseFloat(d['ambient_tempareture']);
+        let et = parseFloat(d['enviroment_temperature']);
+        let at = parseFloat(d['ambient_temperature']);
         eventBus.$emit(Events.onEnviromentUpdate, et, at);
     }, 2000);
     return ac;
